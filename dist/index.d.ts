@@ -1669,6 +1669,7 @@ export declare class Terminal implements ITerminalCore {
     private isDisposed;
     private animationFrameId?;
     private writeQueue;
+    private fontLoadGeneration;
     private addons;
     private customKeyEventHandler?;
     private currentTitle;
@@ -1698,6 +1699,7 @@ export declare class Terminal implements ITerminalCore {
      * Updates canvas size to match new font metrics and forces a full re-render
      */
     private handleFontChange;
+    private scheduleFontRemeasure;
     /**
      * Parse a CSS color string to 0xRRGGBB format.
      * Returns 0 if the color is undefined or invalid.

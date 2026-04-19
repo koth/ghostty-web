@@ -2517,6 +2517,56 @@ describe('Options Proxy handleOptionChange', () => {
     term.dispose();
   });
 
+  test('remeasures fonts after pending document fonts load', async () => {
+    if (!container) return;
+
+    let resolveReady!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      resolveReady = resolve;
+    });
+    const originalFontsDescriptor = Object.getOwnPropertyDescriptor(document, 'fonts');
+
+    Object.defineProperty(document, 'fonts', {
+      configurable: true,
+      value: {
+        load: () => Promise.resolve([]),
+        ready,
+      },
+    });
+
+    try {
+      const term = await createIsolatedTerminal({
+        fontFamily: '"JetBrainsMono Nerd Font Mono", monospace',
+        cols: 80,
+        rows: 24,
+      });
+      term.open(container);
+
+      const renderer = (term as any).renderer;
+      const canvas = (term as any).canvas as HTMLCanvasElement;
+
+      renderer.remeasureFont = () => {
+        renderer.metrics = {
+          width: 8,
+          height: 16,
+          baseline: 11,
+        };
+      };
+
+      resolveReady();
+      await ready;
+      await Promise.resolve();
+
+      expect(canvas.style.height).toBe(`${term.rows * 16}px`);
+
+      term.dispose();
+    } finally {
+      if (originalFontsDescriptor) {
+        Object.defineProperty(document, 'fonts', originalFontsDescriptor);
+      }
+    }
+  });
+
   test('font change clears active selection', async () => {
     if (!container) return;
 

@@ -200,25 +200,38 @@ export class CanvasRenderer {
     const width = Math.ceil(widthMetrics.width);
 
     // Measure line height from visible terminal glyphs.
-    // Only probe Powerline separators when a matching Nerd/Powerline web font is loaded,
-    // otherwise fallback glyph boxes can distort the row metrics.
+    // Only trust Powerline separators when they resolve differently than the stack's normal
+    // fallback path, otherwise missing-glyph boxes can distort the row metrics.
     const baseHeightMetrics = ctx.measureText('Mg');
     const probeFamily = this.fontFamily
       .split(',')
       .map((family) => family.trim().replace(/^['"]|['"]$/g, ''))
       .find((family) => /nerd|powerline/i.test(family));
-    let hasLoadedProbeFamily = false;
-    if (probeFamily && typeof document !== 'undefined' && 'fonts' in document) {
-      for (const font of document.fonts as unknown as Iterable<FontFace>) {
-        if (font.status === 'loaded' && font.family.toLowerCase() === probeFamily.toLowerCase()) {
-          hasLoadedProbeFamily = true;
-        }
-      }
+    let hasDistinctProbeMetrics = false;
+    let probeMetrics = baseHeightMetrics;
+
+    if (probeFamily) {
+      probeMetrics = ctx.measureText('Mg\uE0B0\uE0B2');
+
+      const families = this.fontFamily.split(',').map((family) => family.trim());
+      const fallbackFamily = ['"__ghostty_missing_font__"', ...families.slice(1)].join(', ');
+      ctx.font = `${this.fontSize}px ${fallbackFamily}`;
+      const fallbackProbeMetrics = ctx.measureText('Mg\uE0B0\uE0B2');
+      ctx.font = `${this.fontSize}px ${this.fontFamily}`;
+
+      hasDistinctProbeMetrics =
+        Math.abs(probeMetrics.width - fallbackProbeMetrics.width) > 0.01 ||
+        Math.abs(
+          (probeMetrics.actualBoundingBoxAscent ?? 0) -
+            (fallbackProbeMetrics.actualBoundingBoxAscent ?? 0)
+        ) > 0.01 ||
+        Math.abs(
+          (probeMetrics.actualBoundingBoxDescent ?? 0) -
+            (fallbackProbeMetrics.actualBoundingBoxDescent ?? 0)
+        ) > 0.01;
     }
 
-    const heightMetrics = hasLoadedProbeFamily
-      ? ctx.measureText('Mg\uE0B0\uE0B2')
-      : baseHeightMetrics;
+    const heightMetrics = hasDistinctProbeMetrics ? probeMetrics : baseHeightMetrics;
     const ascent =
       heightMetrics.actualBoundingBoxAscent ||
       heightMetrics.fontBoundingBoxAscent ||

@@ -63,7 +63,7 @@ describe('CanvasRenderer', () => {
   });
 
   describe('Font Metrics', () => {
-    test('ignores powerline glyph metrics when no loaded Nerd font is present', () => {
+    test('ignores powerline glyph metrics when they match the fallback stack', () => {
       const originalGetContext = HTMLCanvasElement.prototype.getContext;
 
       HTMLCanvasElement.prototype.getContext = function (contextType: string, options?: any) {
@@ -73,9 +73,9 @@ describe('CanvasRenderer', () => {
 
         return {
           canvas: this,
-          font: '15px monospace',
+          font: '15px "JetBrainsMono Nerd Font Mono", monospace',
           scale: () => {},
-          measureText: (text: string) => {
+          measureText(this: { font: string }, text: string) {
             if (text === 'M') {
               return {
                 width: 8,
@@ -92,11 +92,21 @@ describe('CanvasRenderer', () => {
               };
             }
 
-            return {
-              width: 32,
-              actualBoundingBoxAscent: 14.6,
-              actualBoundingBoxDescent: 4.4,
-            };
+            if (text === 'Mg\uE0B0\uE0B2') {
+              return this.font.includes('__ghostty_missing_font__')
+                ? {
+                    width: 32,
+                    actualBoundingBoxAscent: 14.6,
+                    actualBoundingBoxDescent: 4.4,
+                  }
+                : {
+                    width: 32,
+                    actualBoundingBoxAscent: 14.6,
+                    actualBoundingBoxDescent: 4.4,
+                  };
+            }
+
+            return { width: 0 };
           },
         } as any;
       };
@@ -114,10 +124,8 @@ describe('CanvasRenderer', () => {
       }
     });
 
-    test('rounds ascent and descent separately when a loaded Nerd font uses powerline glyphs', () => {
+    test('rounds ascent and descent separately when a Nerd font differs from the fallback stack', () => {
       const originalGetContext = HTMLCanvasElement.prototype.getContext;
-      const originalFonts = (document as Document & { fonts?: unknown }).fonts;
-      const originalFontsDescriptor = Object.getOwnPropertyDescriptor(document, 'fonts');
 
       HTMLCanvasElement.prototype.getContext = function (contextType: string, options?: any) {
         if (contextType !== '2d') {
@@ -128,7 +136,7 @@ describe('CanvasRenderer', () => {
           canvas: this,
           font: '15px "JetBrainsMono Nerd Font Mono"',
           scale: () => {},
-          measureText: (text: string) => {
+          measureText(this: { font: string }, text: string) {
             if (text === 'M') {
               return {
                 width: 8,
@@ -145,19 +153,24 @@ describe('CanvasRenderer', () => {
               };
             }
 
-            return {
-              width: 32,
-              actualBoundingBoxAscent: 10.2,
-              actualBoundingBoxDescent: 0.3,
-            };
+            if (text === 'Mg\uE0B0\uE0B2') {
+              return this.font.includes('__ghostty_missing_font__')
+                ? {
+                    width: 32,
+                    actualBoundingBoxAscent: 14.6,
+                    actualBoundingBoxDescent: 4.4,
+                  }
+                : {
+                    width: 32,
+                    actualBoundingBoxAscent: 10.2,
+                    actualBoundingBoxDescent: 0.3,
+                  };
+            }
+
+            return { width: 0 };
           },
         } as any;
       };
-
-      Object.defineProperty(document, 'fonts', {
-        configurable: true,
-        value: [{ family: 'JetBrainsMono Nerd Font Mono', status: 'loaded' }],
-      });
 
       try {
         const renderer = new CanvasRenderer(document.createElement('canvas'), {
@@ -171,15 +184,6 @@ describe('CanvasRenderer', () => {
         });
       } finally {
         HTMLCanvasElement.prototype.getContext = originalGetContext;
-
-        if (originalFontsDescriptor) {
-          Object.defineProperty(document, 'fonts', originalFontsDescriptor);
-        } else {
-          Object.defineProperty(document, 'fonts', {
-            configurable: true,
-            value: originalFonts,
-          });
-        }
       }
     });
   });
