@@ -199,14 +199,22 @@ export class CanvasRenderer {
     const widthMetrics = ctx.measureText('M');
     const width = Math.ceil(widthMetrics.width);
 
-    // Measure height using ascent + descent with padding for glyph overflow
-    const ascent = widthMetrics.actualBoundingBoxAscent || this.fontSize * 0.8;
-    const descent = widthMetrics.actualBoundingBoxDescent || this.fontSize * 0.2;
+    // Measure line height from actual terminal glyphs instead of the full em box.
+    // This keeps Nerd Font powerline separators aligned without adding extra row padding.
+    const heightMetrics = ctx.measureText('Mg\uE0B0\uE0B2');
+    const ascent =
+      heightMetrics.actualBoundingBoxAscent ||
+      heightMetrics.fontBoundingBoxAscent ||
+      widthMetrics.actualBoundingBoxAscent ||
+      this.fontSize * 0.8;
+    const descent =
+      heightMetrics.actualBoundingBoxDescent ||
+      heightMetrics.fontBoundingBoxDescent ||
+      widthMetrics.actualBoundingBoxDescent ||
+      this.fontSize * 0.2;
 
-    // Add 2px padding to height to account for glyphs that overflow (like 'f', 'd', 'g', 'p')
-    // and anti-aliasing pixels
-    const height = Math.ceil(ascent + descent) + 2;
-    const baseline = Math.ceil(ascent) + 1; // Offset baseline by half the padding
+    const height = Math.ceil(ascent + descent);
+    const baseline = Math.ceil(ascent);
 
     return { width, height, baseline };
   }

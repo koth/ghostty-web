@@ -1670,8 +1670,8 @@ class BA {
   measureFont() {
     const Q = document.createElement("canvas").getContext("2d");
     Q.font = `${this.fontSize}px ${this.fontFamily}`;
-    const E = Q.measureText("M"), g = Math.ceil(E.width), C = E.actualBoundingBoxAscent || this.fontSize * 0.8, I = E.actualBoundingBoxDescent || this.fontSize * 0.2, D = Math.ceil(C + I) + 2, o = Math.ceil(C) + 1;
-    return { width: g, height: D, baseline: o };
+    const E = Q.measureText("M"), g = Math.ceil(E.width), C = Q.measureText("Mg"), I = C.actualBoundingBoxAscent || C.fontBoundingBoxAscent || E.actualBoundingBoxAscent || this.fontSize * 0.8, D = C.actualBoundingBoxDescent || C.fontBoundingBoxDescent || E.actualBoundingBoxDescent || this.fontSize * 0.2, o = Math.ceil(I + D), w = Math.ceil(I);
+    return { width: g, height: o, baseline: w };
   }
   /**
    * Remeasure font metrics (call after font loads or changes)
