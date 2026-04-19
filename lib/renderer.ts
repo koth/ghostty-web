@@ -213,8 +213,10 @@ export class CanvasRenderer {
       widthMetrics.actualBoundingBoxDescent ||
       this.fontSize * 0.2;
 
-    const height = Math.ceil(ascent + descent);
-    const baseline = Math.ceil(ascent);
+    const ascentPx = Math.ceil(ascent);
+    const descentPx = Math.ceil(descent);
+    const height = ascentPx + descentPx;
+    const baseline = ascentPx;
 
     return { width, height, baseline };
   }

@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, test } from 'bun:test';
-import { DEFAULT_THEME } from './renderer';
+import { CanvasRenderer, DEFAULT_THEME } from './renderer';
 
 describe('CanvasRenderer', () => {
   describe('Default Theme', () => {
@@ -59,6 +59,51 @@ describe('CanvasRenderer', () => {
       expect(DEFAULT_THEME.foreground).toMatch(hexPattern);
       expect(DEFAULT_THEME.background).toMatch(hexPattern);
       expect(DEFAULT_THEME.cursor).toMatch(hexPattern);
+    });
+  });
+
+  describe('Font Metrics', () => {
+    test('rounds ascent and descent separately when measuring line height', () => {
+      const originalGetContext = HTMLCanvasElement.prototype.getContext;
+
+      HTMLCanvasElement.prototype.getContext = function (contextType: string, options?: any) {
+        if (contextType !== '2d') {
+          return originalGetContext.call(this, contextType, options);
+        }
+
+        return {
+          canvas: this,
+          font: '15px monospace',
+          scale: () => {},
+          measureText: (text: string) => {
+            if (text === 'M') {
+              return {
+                width: 8,
+                actualBoundingBoxAscent: 10.2,
+                actualBoundingBoxDescent: 0.3,
+              };
+            }
+
+            return {
+              width: 32,
+              actualBoundingBoxAscent: 10.2,
+              actualBoundingBoxDescent: 0.3,
+            };
+          },
+        } as any;
+      };
+
+      try {
+        const renderer = new CanvasRenderer(document.createElement('canvas'));
+
+        expect(renderer.getMetrics()).toEqual({
+          width: 8,
+          height: 12,
+          baseline: 11,
+        });
+      } finally {
+        HTMLCanvasElement.prototype.getContext = originalGetContext;
+      }
     });
   });
 });
