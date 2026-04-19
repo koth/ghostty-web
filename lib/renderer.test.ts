@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, test } from 'bun:test';
-import { DEFAULT_THEME } from './renderer';
+import { CanvasRenderer, DEFAULT_THEME } from './renderer';
 
 describe('CanvasRenderer', () => {
   describe('Default Theme', () => {
@@ -59,6 +59,132 @@ describe('CanvasRenderer', () => {
       expect(DEFAULT_THEME.foreground).toMatch(hexPattern);
       expect(DEFAULT_THEME.background).toMatch(hexPattern);
       expect(DEFAULT_THEME.cursor).toMatch(hexPattern);
+    });
+  });
+
+  describe('Font Metrics', () => {
+    test('ignores powerline glyph metrics when they match the fallback stack', () => {
+      const originalGetContext = HTMLCanvasElement.prototype.getContext;
+
+      HTMLCanvasElement.prototype.getContext = function (contextType: string, options?: any) {
+        if (contextType !== '2d') {
+          return originalGetContext.call(this, contextType, options);
+        }
+
+        return {
+          canvas: this,
+          font: '15px "JetBrainsMono Nerd Font Mono", monospace',
+          scale: () => {},
+          measureText(this: { font: string }, text: string) {
+            if (text === 'M') {
+              return {
+                width: 8,
+                actualBoundingBoxAscent: 10.1,
+                actualBoundingBoxDescent: 2.1,
+              };
+            }
+
+            if (text === 'Mg') {
+              return {
+                width: 16,
+                actualBoundingBoxAscent: 10.1,
+                actualBoundingBoxDescent: 2.1,
+              };
+            }
+
+            if (text === 'Mg\uE0B0\uE0B2') {
+              return this.font.includes('__ghostty_missing_font__')
+                ? {
+                    width: 32,
+                    actualBoundingBoxAscent: 14.6,
+                    actualBoundingBoxDescent: 4.4,
+                  }
+                : {
+                    width: 32,
+                    actualBoundingBoxAscent: 14.6,
+                    actualBoundingBoxDescent: 4.4,
+                  };
+            }
+
+            return { width: 0 };
+          },
+        } as any;
+      };
+
+      try {
+        const renderer = new CanvasRenderer(document.createElement('canvas'));
+
+        expect(renderer.getMetrics()).toEqual({
+          width: 8,
+          height: 14,
+          baseline: 11,
+        });
+      } finally {
+        HTMLCanvasElement.prototype.getContext = originalGetContext;
+      }
+    });
+
+    test('rounds ascent and descent separately when a Nerd font differs from the fallback stack', () => {
+      const originalGetContext = HTMLCanvasElement.prototype.getContext;
+
+      HTMLCanvasElement.prototype.getContext = function (contextType: string, options?: any) {
+        if (contextType !== '2d') {
+          return originalGetContext.call(this, contextType, options);
+        }
+
+        return {
+          canvas: this,
+          font: '15px "JetBrainsMono Nerd Font Mono"',
+          scale: () => {},
+          measureText(this: { font: string }, text: string) {
+            if (text === 'M') {
+              return {
+                width: 8,
+                actualBoundingBoxAscent: 10.2,
+                actualBoundingBoxDescent: 0.3,
+              };
+            }
+
+            if (text === 'Mg') {
+              return {
+                width: 16,
+                actualBoundingBoxAscent: 9.4,
+                actualBoundingBoxDescent: 0.2,
+              };
+            }
+
+            if (text === 'Mg\uE0B0\uE0B2') {
+              return this.font.includes('__ghostty_missing_font__')
+                ? {
+                    width: 32,
+                    actualBoundingBoxAscent: 14.6,
+                    actualBoundingBoxDescent: 4.4,
+                  }
+                : {
+                    width: 32,
+                    actualBoundingBoxAscent: 10.2,
+                    actualBoundingBoxDescent: 0.3,
+                  };
+            }
+
+            return { width: 0 };
+          },
+        } as any;
+      };
+
+      try {
+        const renderer = new CanvasRenderer(document.createElement('canvas'), {
+          fontFamily: '"JetBrainsMono Nerd Font Mono", monospace',
+        });
+
+        expect(renderer.getMetrics()).toEqual({
+          width: 8,
+          height: 12,
+          baseline: 11,
+        });
+      } finally {
+        HTMLCanvasElement.prototype.getContext = originalGetContext;
+      }
     });
   });
 });

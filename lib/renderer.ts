@@ -199,14 +199,56 @@ export class CanvasRenderer {
     const widthMetrics = ctx.measureText('M');
     const width = Math.ceil(widthMetrics.width);
 
-    // Measure height using ascent + descent with padding for glyph overflow
-    const ascent = widthMetrics.actualBoundingBoxAscent || this.fontSize * 0.8;
-    const descent = widthMetrics.actualBoundingBoxDescent || this.fontSize * 0.2;
+    // Measure line height from visible terminal glyphs.
+    // Only trust Powerline separators when they resolve differently than the stack's normal
+    // fallback path, otherwise missing-glyph boxes can distort the row metrics.
+    const baseHeightMetrics = ctx.measureText('Mg');
+    const probeFamily = this.fontFamily
+      .split(',')
+      .map((family) => family.trim().replace(/^['"]|['"]$/g, ''))
+      .find((family) => /nerd|powerline/i.test(family));
+    let hasDistinctProbeMetrics = false;
+    let probeMetrics = baseHeightMetrics;
 
-    // Add 2px padding to height to account for glyphs that overflow (like 'f', 'd', 'g', 'p')
-    // and anti-aliasing pixels
-    const height = Math.ceil(ascent + descent) + 2;
-    const baseline = Math.ceil(ascent) + 1; // Offset baseline by half the padding
+    if (probeFamily) {
+      probeMetrics = ctx.measureText('Mg\uE0B0\uE0B2');
+
+      const families = this.fontFamily.split(',').map((family) => family.trim());
+      const fallbackFamily = ['"__ghostty_missing_font__"', ...families.slice(1)].join(', ');
+      ctx.font = `${this.fontSize}px ${fallbackFamily}`;
+      const fallbackProbeMetrics = ctx.measureText('Mg\uE0B0\uE0B2');
+      ctx.font = `${this.fontSize}px ${this.fontFamily}`;
+
+      hasDistinctProbeMetrics =
+        Math.abs(probeMetrics.width - fallbackProbeMetrics.width) > 0.01 ||
+        Math.abs(
+          (probeMetrics.actualBoundingBoxAscent ?? 0) -
+            (fallbackProbeMetrics.actualBoundingBoxAscent ?? 0)
+        ) > 0.01 ||
+        Math.abs(
+          (probeMetrics.actualBoundingBoxDescent ?? 0) -
+            (fallbackProbeMetrics.actualBoundingBoxDescent ?? 0)
+        ) > 0.01;
+    }
+
+    const heightMetrics = hasDistinctProbeMetrics ? probeMetrics : baseHeightMetrics;
+    const ascent =
+      heightMetrics.actualBoundingBoxAscent ||
+      heightMetrics.fontBoundingBoxAscent ||
+      baseHeightMetrics.actualBoundingBoxAscent ||
+      widthMetrics.actualBoundingBoxAscent ||
+      this.fontSize * 0.8;
+    const descent =
+      heightMetrics.actualBoundingBoxDescent ||
+      heightMetrics.fontBoundingBoxDescent ||
+      baseHeightMetrics.actualBoundingBoxDescent ||
+      widthMetrics.actualBoundingBoxDescent ||
+      this.fontSize * 0.2;
+
+    const ascentPx = Math.ceil(ascent);
+    const descentPx = Math.ceil(descent);
+    const height = ascentPx + descentPx;
+    const baseline = ascentPx;
 
     return { width, height, baseline };
   }

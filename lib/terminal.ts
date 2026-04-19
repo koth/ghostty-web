@@ -102,6 +102,7 @@ export class Terminal implements ITerminalCore {
   private isDisposed = false;
   private animationFrameId?: number;
   private writeQueue: Uint8Array[] = [];
+  private fontLoadGeneration = 0;
 
   // Addons
   private addons: ITerminalAddon[] = [];
@@ -217,6 +218,7 @@ export class Terminal implements ITerminalCore {
         if (this.renderer) {
           this.renderer.setFontFamily(this.options.fontFamily);
           this.handleFontChange();
+          this.scheduleFontRemeasure();
         }
         break;
 
@@ -252,6 +254,41 @@ export class Terminal implements ITerminalCore {
 
     // Force full re-render with new font
     this.renderer.render(this.wasmTerm, true, this.viewportY, this);
+  }
+
+  private scheduleFontRemeasure(): void {
+    if (typeof document === 'undefined' || !('fonts' in document)) return;
+
+    const generation = ++this.fontLoadGeneration;
+    void document.fonts.load(
+      `${this.options.fontSize}px ${this.options.fontFamily}`,
+      'Mg\uE0B0\uE0B2'
+    );
+
+    document.fonts.ready.then(() => {
+      if (
+        generation !== this.fontLoadGeneration ||
+        !this.renderer ||
+        this.isDisposed ||
+        !this.isOpen
+      ) {
+        return;
+      }
+
+      const before = this.renderer.getMetrics();
+      this.renderer.remeasureFont();
+      const after = this.renderer.getMetrics();
+
+      if (
+        before.width === after.width &&
+        before.height === after.height &&
+        before.baseline === after.baseline
+      ) {
+        return;
+      }
+
+      this.handleFontChange();
+    });
   }
 
   /**
@@ -427,6 +464,7 @@ export class Terminal implements ITerminalCore {
 
       // Size canvas to terminal dimensions (use renderer.resize for proper DPI scaling)
       this.renderer.resize(this.cols, this.rows);
+      this.scheduleFontRemeasure();
 
       // Create mouse tracking configuration
       const canvas = this.canvas;
