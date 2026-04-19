@@ -63,7 +63,7 @@ describe('CanvasRenderer', () => {
   });
 
   describe('Font Metrics', () => {
-    test('rounds ascent and descent separately when measuring line height', () => {
+    test('ignores powerline glyph metrics when no loaded Nerd font is present', () => {
       const originalGetContext = HTMLCanvasElement.prototype.getContext;
 
       HTMLCanvasElement.prototype.getContext = function (contextType: string, options?: any) {
@@ -79,8 +79,69 @@ describe('CanvasRenderer', () => {
             if (text === 'M') {
               return {
                 width: 8,
+                actualBoundingBoxAscent: 10.1,
+                actualBoundingBoxDescent: 2.1,
+              };
+            }
+
+            if (text === 'Mg') {
+              return {
+                width: 16,
+                actualBoundingBoxAscent: 10.1,
+                actualBoundingBoxDescent: 2.1,
+              };
+            }
+
+            return {
+              width: 32,
+              actualBoundingBoxAscent: 14.6,
+              actualBoundingBoxDescent: 4.4,
+            };
+          },
+        } as any;
+      };
+
+      try {
+        const renderer = new CanvasRenderer(document.createElement('canvas'));
+
+        expect(renderer.getMetrics()).toEqual({
+          width: 8,
+          height: 14,
+          baseline: 11,
+        });
+      } finally {
+        HTMLCanvasElement.prototype.getContext = originalGetContext;
+      }
+    });
+
+    test('rounds ascent and descent separately when a loaded Nerd font uses powerline glyphs', () => {
+      const originalGetContext = HTMLCanvasElement.prototype.getContext;
+      const originalFonts = (document as Document & { fonts?: unknown }).fonts;
+      const originalFontsDescriptor = Object.getOwnPropertyDescriptor(document, 'fonts');
+
+      HTMLCanvasElement.prototype.getContext = function (contextType: string, options?: any) {
+        if (contextType !== '2d') {
+          return originalGetContext.call(this, contextType, options);
+        }
+
+        return {
+          canvas: this,
+          font: '15px "JetBrainsMono Nerd Font Mono"',
+          scale: () => {},
+          measureText: (text: string) => {
+            if (text === 'M') {
+              return {
+                width: 8,
                 actualBoundingBoxAscent: 10.2,
                 actualBoundingBoxDescent: 0.3,
+              };
+            }
+
+            if (text === 'Mg') {
+              return {
+                width: 16,
+                actualBoundingBoxAscent: 9.4,
+                actualBoundingBoxDescent: 0.2,
               };
             }
 
@@ -93,8 +154,15 @@ describe('CanvasRenderer', () => {
         } as any;
       };
 
+      Object.defineProperty(document, 'fonts', {
+        configurable: true,
+        value: [{ family: 'JetBrainsMono Nerd Font Mono', status: 'loaded' }],
+      });
+
       try {
-        const renderer = new CanvasRenderer(document.createElement('canvas'));
+        const renderer = new CanvasRenderer(document.createElement('canvas'), {
+          fontFamily: '"JetBrainsMono Nerd Font Mono", monospace',
+        });
 
         expect(renderer.getMetrics()).toEqual({
           width: 8,
@@ -103,6 +171,15 @@ describe('CanvasRenderer', () => {
         });
       } finally {
         HTMLCanvasElement.prototype.getContext = originalGetContext;
+
+        if (originalFontsDescriptor) {
+          Object.defineProperty(document, 'fonts', originalFontsDescriptor);
+        } else {
+          Object.defineProperty(document, 'fonts', {
+            configurable: true,
+            value: originalFonts,
+          });
+        }
       }
     });
   });

@@ -199,17 +199,36 @@ export class CanvasRenderer {
     const widthMetrics = ctx.measureText('M');
     const width = Math.ceil(widthMetrics.width);
 
-    // Measure line height from actual terminal glyphs instead of the full em box.
-    // This keeps Nerd Font powerline separators aligned without adding extra row padding.
-    const heightMetrics = ctx.measureText('Mg\uE0B0\uE0B2');
+    // Measure line height from visible terminal glyphs.
+    // Only probe Powerline separators when a matching Nerd/Powerline web font is loaded,
+    // otherwise fallback glyph boxes can distort the row metrics.
+    const baseHeightMetrics = ctx.measureText('Mg');
+    const probeFamily = this.fontFamily
+      .split(',')
+      .map((family) => family.trim().replace(/^['"]|['"]$/g, ''))
+      .find((family) => /nerd|powerline/i.test(family));
+    let hasLoadedProbeFamily = false;
+    if (probeFamily && typeof document !== 'undefined' && 'fonts' in document) {
+      for (const font of document.fonts as unknown as Iterable<FontFace>) {
+        if (font.status === 'loaded' && font.family.toLowerCase() === probeFamily.toLowerCase()) {
+          hasLoadedProbeFamily = true;
+        }
+      }
+    }
+
+    const heightMetrics = hasLoadedProbeFamily
+      ? ctx.measureText('Mg\uE0B0\uE0B2')
+      : baseHeightMetrics;
     const ascent =
       heightMetrics.actualBoundingBoxAscent ||
       heightMetrics.fontBoundingBoxAscent ||
+      baseHeightMetrics.actualBoundingBoxAscent ||
       widthMetrics.actualBoundingBoxAscent ||
       this.fontSize * 0.8;
     const descent =
       heightMetrics.actualBoundingBoxDescent ||
       heightMetrics.fontBoundingBoxDescent ||
+      baseHeightMetrics.actualBoundingBoxDescent ||
       widthMetrics.actualBoundingBoxDescent ||
       this.fontSize * 0.2;
 
