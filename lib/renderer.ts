@@ -252,7 +252,7 @@ export class CanvasRenderer {
 
     const ascentPx = Math.ceil(ascent);
     const descentPx = Math.ceil(descent);
-    const height = ascentPx + descentPx + 2;
+    const height = ascentPx + descentPx + 4;
     const baseline = ascentPx;
 
     return { width, height, baseline };
