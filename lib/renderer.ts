@@ -200,9 +200,10 @@ export class CanvasRenderer {
     const width = Math.ceil(widthMetrics.width);
 
     // Measure line height from visible terminal glyphs.
+    // Include '_' because some fonts have a deeper descender on underscore than on 'g'.
     // Only trust Powerline separators when they resolve differently than the stack's normal
     // fallback path, otherwise missing-glyph boxes can distort the row metrics.
-    const baseHeightMetrics = ctx.measureText('Mg');
+    const baseHeightMetrics = ctx.measureText('Mg_');
     const probeFamily = this.fontFamily
       .split(',')
       .map((family) => family.trim().replace(/^['"]|['"]$/g, ''))
@@ -211,12 +212,12 @@ export class CanvasRenderer {
     let probeMetrics = baseHeightMetrics;
 
     if (probeFamily) {
-      probeMetrics = ctx.measureText('Mg\uE0B0\uE0B2');
+      probeMetrics = ctx.measureText('Mg_\uE0B0\uE0B2');
 
       const families = this.fontFamily.split(',').map((family) => family.trim());
       const fallbackFamily = ['"__ghostty_missing_font__"', ...families.slice(1)].join(', ');
       ctx.font = `${this.fontSize}px ${fallbackFamily}`;
-      const fallbackProbeMetrics = ctx.measureText('Mg\uE0B0\uE0B2');
+      const fallbackProbeMetrics = ctx.measureText('Mg_\uE0B0\uE0B2');
       ctx.font = `${this.fontSize}px ${this.fontFamily}`;
 
       hasDistinctProbeMetrics =
@@ -233,21 +234,25 @@ export class CanvasRenderer {
 
     const heightMetrics = hasDistinctProbeMetrics ? probeMetrics : baseHeightMetrics;
     const ascent =
-      heightMetrics.actualBoundingBoxAscent ||
       heightMetrics.fontBoundingBoxAscent ||
+      heightMetrics.actualBoundingBoxAscent ||
+      baseHeightMetrics.fontBoundingBoxAscent ||
       baseHeightMetrics.actualBoundingBoxAscent ||
+      widthMetrics.fontBoundingBoxAscent ||
       widthMetrics.actualBoundingBoxAscent ||
       this.fontSize * 0.8;
     const descent =
-      heightMetrics.actualBoundingBoxDescent ||
       heightMetrics.fontBoundingBoxDescent ||
+      heightMetrics.actualBoundingBoxDescent ||
+      baseHeightMetrics.fontBoundingBoxDescent ||
       baseHeightMetrics.actualBoundingBoxDescent ||
+      widthMetrics.fontBoundingBoxDescent ||
       widthMetrics.actualBoundingBoxDescent ||
       this.fontSize * 0.2;
 
     const ascentPx = Math.ceil(ascent);
     const descentPx = Math.ceil(descent);
-    const height = ascentPx + descentPx;
+    const height = ascentPx + descentPx + 2;
     const baseline = ascentPx;
 
     return { width, height, baseline };
@@ -483,8 +488,9 @@ export class CanvasRenderer {
       }
     }
 
-    // Render each line
-    for (let y = 0; y < dims.rows; y++) {
+    // Render each line bottom-to-top so that descender overflow
+    // from line N into line N+1 is preserved (not covered by N+1's background fill).
+    for (let y = dims.rows - 1; y >= 0; y--) {
       if (!rowsToRender.has(y)) {
         continue;
       }
@@ -689,6 +695,7 @@ export class CanvasRenderer {
       // Simple cell - single codepoint
       char = String.fromCodePoint(cell.codepoint || 32); // Default to space if null
     }
+
     this.ctx.fillText(char, textX, textY);
 
     // Reset alpha
